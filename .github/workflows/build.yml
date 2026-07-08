@@ -255,13 +255,6 @@ jobs:
         id: lto_output
         run: echo "lto_actual=${{ env.LTO_ACTUAL }}" >> "$GITHUB_OUTPUT"
 
-      - name: Notify Telegram
-        if: success()
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: bash builder/scripts/notify_telegram.sh
-
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -269,3 +262,50 @@ jobs:
           path: kernel-source/DumpC2J-Release
           retention-days: 7
 
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare assets
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f -name "*.zip" -exec mv {} release_assets/ \; || true
+          find artifacts -type f -name "*.img" -exec mv {} release_assets/ \; || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dumpc2j-build-${{ github.run_number }}-${{ github.sha }}
+          name: DumpC2J Build - ${{ github.sha }}
+          body: |
+            ### 🛠️ Build Configuration
+            | Setting | Value |
+            |---------|-------|
+            | **Variant** | `${{ inputs.variant }}` |
+            | **Root Method** | `${{ inputs.root }}` |
+            | **Refresh Rate (HZ)** | `${{ inputs.hz }}` |
+            | **LTO Mode** | `${{ inputs.lto }}` |
+            | **Clang Variant** | `${{ inputs.clang_variant }}` |
+            | **Run Mode** | `${{ inputs.run_mode }}` |
+            
+            ###  Features & Mods
+            | Feature | Status |
+            |---------|--------|
+            | Spoof Uname | `${{ inputs.spoof_uname }}` |
+            | Kernel Version Spoof | `${{ inputs.kernel_version_spoof || 'Upstream' }}` |
+            | Bypass Charging | `${{ inputs.bypasscharging }}` |
+            | Droidspaces | `${{ inputs.droidspaces }}` |
+            | NoMount VFS | `${{ inputs.nomount }}` |
+            | Debug Mode | `${{ inputs.debug }}` |
+            
+            **Commit:** ${{ github.sha }}
+            **Ref:** ${{ github.ref }}
+          files: release_assets/*
