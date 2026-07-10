@@ -142,7 +142,7 @@ jobs:
         run: |
           git clone --depth=50 \
             --branch zeromount-kernel \
-            https://${{ secrets.GH_TOKEN }}@github.com/viktor749382/DumpC2J-Kernel \
+            https://${{ secrets.GH_TOKEN }}@github.com/VOIDx777/DumpC2J-Kernel \
             kernel-source
 
       - name: Parse Inputs
