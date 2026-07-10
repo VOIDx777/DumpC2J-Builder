@@ -141,8 +141,8 @@ jobs:
       - name: Clone Kernel Source
         run: |
           git clone --depth=50 \
-            --branch main \
-            https://${{ secrets.GH_TOKEN }}@github.com/adennnqt/DumpC2J-Kernel \
+            --branch fix-droidspaces-cwd \
+            https://${{ secrets.GH_TOKEN }}@github.com/viktor749382/DumpC2J-Kernel \
             kernel-source
 
       - name: Parse Inputs
