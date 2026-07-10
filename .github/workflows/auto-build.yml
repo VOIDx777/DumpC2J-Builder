@@ -1,0 +1,153 @@
+name: DumpC2J Daily Focused Build
+
+on:
+  schedule:
+    # Runs at 18:30 UTC daily (12:00 AM IST)
+    - cron: '30 18 * * *'
+  workflow_dispatch: # Allows manual trigger of this exact build
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: "Auto Build (SukiSU / Smooth / ZyClang)"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Builder
+        uses: actions/checkout@v4
+        with:
+          path: builder
+          fetch-depth: 0
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=50 \
+            --branch main \
+            https://${{ secrets.GH_TOKEN }}@github.com/adennnqt/DumpC2J-Kernel \
+            kernel-source
+
+      - name: Setup Hardcoded Environment Variables
+        run: |
+          echo "HZ_ID=300" >> $GITHUB_ENV
+          echo "ACTUAL_ROOT=sukisu" >> $GITHUB_ENV
+          echo "BUILD_NAME=root-sukisu-smooth-bypasscharging-nomount" >> $GITHUB_ENV
+
+      - name: Create Swap
+        run: |
+          SWAPFILE="/mnt/build_swapfile"
+          while true; do
+            if sudo fallocate -l 10G $SWAPFILE || sudo dd if=/dev/zero of=$SWAPFILE bs=1M count=10240 status=progress; then
+              break
+            else
+              sleep 5
+            fi
+          done
+          sudo chmod 600 $SWAPFILE && sudo mkswap $SWAPFILE && sudo swapon $SWAPFILE
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex \
+            g++-multilib gcc-multilib git gnupg gperf imagemagick \
+            lib32ncurses-dev lib32readline-dev lib32z1-dev libncurses-dev \
+            libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush \
+            rsync schedtool squashfs-tools xsltproc zip zlib1g-dev \
+            python3 clang lld llvm jq
+
+      - name: Setup Clang (ZyClang)
+        run: |
+          bash builder/scripts/setup_clang.sh zyc
+
+      - name: Setup AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          cp kernel-source/anykernel/anykernel.sh anykernel/anykernel.sh
+          cp -r kernel-source/anykernel/tools/* anykernel/tools/
+
+      - name: Scout Checkpoint
+        env:
+          ROOT: "sukisu"
+          VARIANT: "root"
+          RUN_MODE: "Release"
+        run: bash builder/scripts/scout.sh
+
+      - name: Setup ccache
+        env:
+          ACTUAL_ROOT: "sukisu"
+          CLANG_VARIANT: "zyc"
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: bash builder/scripts/lib/ccache_setup.sh
+
+      - name: Build Kernel
+        env:
+          INPUT_HZ: "smooth"
+          INPUT_VARIANT: "root"
+          INPUT_ROOT: "sukisu"
+          INPUT_LTO: "full"
+          INPUT_HARDENED: "off"
+          INPUT_HTSR: "on"
+          INPUT_WIFI: "on"
+          INPUT_KGSL: "on"
+          INPUT_DATA: "on"
+          INPUT_BYPASS: "on"
+          INPUT_DROIDSPACES: "off"
+          INPUT_DEBUG: "off"
+          INPUT_KERNEL_NAME: "-anykern3-11-DumpC2J"
+          INPUT_SPOOF_UNAME: "off"
+          INPUT_VERSION_SPOOF: ""
+          INPUT_NOMOUNT: "on"
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          bash builder/scripts/build.sh
+
+      - name: Save ccache
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: bash builder/scripts/lib/ccache_save.sh
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DumpC2J-${{ env.BUILD_NAME }}
+          path: kernel-source/DumpC2J-Release
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare assets
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f -name "*.zip" -exec mv {} release_assets/ \; || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dumpc2j-daily-${{ github.run_number }}
+          name: Daily Auto Build - ${{ github.sha }}
+          body: |
+            ### 🛠️ Build Configuration
+            - **Variant:** Root (SukiSU)
+            - **Refresh Rate:** Smooth (300 HZ)
+            - **Clang Toolchain:** ZyClang
+            - **Mods Enabled:** Bypass Charging, NoMount
+            
+            > [!CAUTION]
+            > **BACKUP your boot.img** before flashing to recover from potential bootloops or other issues.
+            
+            **Commit Details:** ${{ github.sha }}
+          files: release_assets/*
