@@ -47,10 +47,10 @@ case "$HZ_ID" in
 esac
 
 
-if [ "$NOMOUNT" == "on" ]; then
-    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" -e CONFIG_NOMOUNT
+if [ "$ZEROMOUNT" == "on" ]; then
+    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" -e CONFIG_ZEROMOUNT
 else
-    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" -d CONFIG_NOMOUNT
+    "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" -d CONFIG_ZEROMOUNT
 fi
 
 [ "$HARDENED" == "off" ] && "$KERNEL_DIR/scripts/config" --file "$OUT_DIR/.config" \

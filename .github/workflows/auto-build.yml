@@ -66,18 +66,18 @@ jobs:
           fi
           echo "HZ_ID=$HZ_ID" >> $GITHUB_ENV
 
-          # Configure nomount and bypasscharging logic
+          # Configure zeromount and bypasscharging logic
           if [ "$INPUT_VARIANT" == "stock" ]; then
-            INPUT_NOMOUNT="off"
+            INPUT_ZEROMOUNT="off"
           else
             # Default for Root & SUSFS builds
-            INPUT_NOMOUNT="on"
+            INPUT_ZEROMOUNT="on"
           fi
           
           # Bypass Charging is ON for all builds
           INPUT_BYPASS="on"
           
-          echo "INPUT_NOMOUNT=$INPUT_NOMOUNT" >> $GITHUB_ENV
+          echo "INPUT_ZEROMOUNT=$INPUT_ZEROMOUNT" >> $GITHUB_ENV
           echo "INPUT_BYPASS=$INPUT_BYPASS" >> $GITHUB_ENV
 
           # Set Build Name
@@ -87,7 +87,7 @@ jobs:
             BUILD_NAME="${INPUT_VARIANT}-${INPUT_ROOT}-${INPUT_HZ}"
           fi
 
-          [ "$INPUT_NOMOUNT" == "on" ] && BUILD_NAME="${BUILD_NAME}-nomount"
+          [ "$INPUT_ZEROMOUNT" == "on" ] && BUILD_NAME="${BUILD_NAME}-zeromount"
           [ "$INPUT_BYPASS" == "on" ] && BUILD_NAME="${BUILD_NAME}-bypasscharging"
 
           echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
@@ -155,7 +155,7 @@ jobs:
           INPUT_KERNEL_NAME: "-anykern3-11-DumpC2J"
           INPUT_SPOOF_UNAME: "off"
           INPUT_VERSION_SPOOF: ""
-          INPUT_NOMOUNT: ${{ env.INPUT_NOMOUNT }}
+          INPUT_ZEROMOUNT: ${{ env.INPUT_ZEROMOUNT }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           bash builder/scripts/build.sh
@@ -230,7 +230,7 @@ jobs:
           echo "" >> release_body.md
           echo "> [!CAUTION]" >> release_body.md
           echo "> **BACKUP your boot.img** before flashing to recover from potential bootloops or other issues." >> release_body.md
-          echo "> **Note:** Bypass charging is ON for all builds. Nomount is ON for all builds except stock." >> release_body.md
+          echo "> **Note:** Bypass charging is ON for all builds. Zeromount is ON for all builds except stock." >> release_body.md
           echo "" >> release_body.md
 
           HZs=("powersave" "balance" "smooth" "performance" "ultra-performance")
@@ -264,7 +264,7 @@ jobs:
                 if [ "$VARIANT_LOWER" == "stock" ]; then
                   FILE_PREFIX="${FILE_PREFIX}-bypasscharging"
                 else
-                  FILE_PREFIX="${FILE_PREFIX}-nomount-bypasscharging"
+                  FILE_PREFIX="${FILE_PREFIX}-zeromount-bypasscharging"
                 fi
                 
                 ZIP_FILE=$(find release_assets -type f -name "*${FILE_PREFIX}*.zip" -printf "%f\n" | head -n 1)
@@ -301,7 +301,7 @@ jobs:
               STATUS_FILE="artifacts/status-${VARIANT_LOWER}-${ROOT}-${HZ}.txt"
               
               if grep -q "success" "$STATUS_FILE" 2>/dev/null; then
-                FILE_PREFIX="${VARIANT_LOWER}-${ROOT}-${HZ}-nomount-bypasscharging"
+                FILE_PREFIX="${VARIANT_LOWER}-${ROOT}-${HZ}-zeromount-bypasscharging"
                 
                 ZIP_FILE=$(find release_assets -type f -name "*${FILE_PREFIX}*.zip" -printf "%f\n" | head -n 1)
                 

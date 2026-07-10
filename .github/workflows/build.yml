@@ -95,8 +95,8 @@ on:
           - "off"
           - "on"
         default: "off"
-      nomount:
-        description: "NoMount (VFS Path Injection, no mount table)"
+      zeromount:
+        description: "ZeroMount (stat/mmap metadata spoofing)"
         required: true
         type: choice
         options:
@@ -161,7 +161,7 @@ jobs:
           INPUT_DEBUG: ${{ inputs.debug }}
           INPUT_KERNEL_NAME: ${{ inputs.kernel_name }}
           INPUT_SPOOF_UNAME: ${{ inputs.spoof_uname }}
-          INPUT_NOMOUNT: ${{ inputs.nomount }}
+          INPUT_ZEROMOUNT: ${{ inputs.zeromount }}
         run: |
           if [ "$INPUT_HZ" == "powersave" ]; then HZ_ID=100
           elif [ "$INPUT_HZ" == "balance" ]; then HZ_ID=250
@@ -186,7 +186,7 @@ jobs:
           [ "$INPUT_BYPASS" == "on" ] && BUILD_NAME="${BUILD_NAME}-bypasscharging"
           [ "$INPUT_DROIDSPACES" == "on" ] && BUILD_NAME="${BUILD_NAME}-droidspaces"
           [ "$INPUT_DEBUG" == "on" ] && BUILD_NAME="${BUILD_NAME}-debug"
-          [ "$INPUT_NOMOUNT" == "on" ] && BUILD_NAME="${BUILD_NAME}-nomount"
+          [ "$INPUT_ZEROMOUNT" == "on" ] && BUILD_NAME="${BUILD_NAME}-zeromount"
 
           echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
 
@@ -253,7 +253,7 @@ jobs:
           INPUT_KERNEL_NAME: ${{ inputs.kernel_name }}
           INPUT_SPOOF_UNAME: ${{ inputs.spoof_uname }}
           INPUT_VERSION_SPOOF: ${{ inputs.kernel_version_spoof }}
-          INPUT_NOMOUNT: ${{ inputs.nomount }}
+          INPUT_ZEROMOUNT: ${{ inputs.zeromount }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           bash builder/scripts/build.sh
@@ -316,7 +316,7 @@ jobs:
             | Kernel Version Spoof | `${{ inputs.kernel_version_spoof || 'Upstream' }}` |
             | Bypass Charging | `${{ inputs.bypasscharging }}` |
             | Droidspaces | `${{ inputs.droidspaces }}` |
-            | NoMount VFS | `${{ inputs.nomount }}` |
+            | ZeroMount VFS | `${{ inputs.zeromount }}` |
             | Debug Mode | `${{ inputs.debug }}` |
             
             **Commit:** ${{ github.sha }}
