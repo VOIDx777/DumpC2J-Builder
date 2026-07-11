@@ -227,8 +227,8 @@ jobs:
       - name: Setup AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
-          cp kernel-source/anykernel/anykernel.sh anykernel/anykernel.sh
-          cp -r kernel-source/anykernel/tools/* anykernel/tools/
+          #           cp kernel-source/anykernel/anykernel.sh anykernel/anykernel.sh
+          #           cp -r kernel-source/anykernel/tools/* anykernel/tools/
 
       - name: Scout Checkpoint
         env:
