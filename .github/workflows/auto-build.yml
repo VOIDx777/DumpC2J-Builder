@@ -84,7 +84,7 @@ jobs:
 
       - name: Build Kernel
         env:
-          INPUT_HZ: "smooth"
+          INPUT_HZ: "ultra-performance"
           INPUT_VARIANT: "root"
           INPUT_ROOT: "sukisu"
           INPUT_LTO: "full"
