@@ -1,3 +1,11 @@
+# Comment out lines 2559-2560:
+# cp kernel-source/anykernel/anykernel.sh anykernel/anykernel.sh
+# cp -r kernel-source/anykernel/tools/* anykernel/tools/
+
+# Commit + push
+git add .github/workflows/build.yml
+git commit -m "fix: skip custom anykernel copy if not present"
+git push -f origin main
 name: DumpC2J Kernel Builder
 
 on:
