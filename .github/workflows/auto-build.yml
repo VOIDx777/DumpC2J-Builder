@@ -21,9 +21,7 @@ jobs:
 
       - name: Run Upstream Checker
         id: check
-        env:
-          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # Telegram env vars have been removed here
         run: |
           # Run the existing upstream check script and capture the output
           output=$(bash scripts/upstream_check.sh)
@@ -37,7 +35,7 @@ jobs:
           fi
 
   test_build:
-    name: "Test Build (SukiSU / Smooth / SUSFS / Neutron)"
+    name: "Test Build (KSU-Next / Smooth / SUSFS / Neutron)"
     needs: check_upstream
     # Only run the test build if upstream updates were actually found
     if: needs.check_upstream.outputs.update_found == 'true'
@@ -62,8 +60,8 @@ jobs:
       - name: Setup Hardcoded Environment Variables
         run: |
           echo "HZ_ID=300" >> $GITHUB_ENV
-          echo "ACTUAL_ROOT=sukisu" >> $GITHUB_ENV
-          echo "BUILD_NAME=susfs-sukisu-smooth-bypasscharging-nomount" >> $GITHUB_ENV
+          echo "ACTUAL_ROOT=ksu-next" >> $GITHUB_ENV
+          echo "BUILD_NAME=susfs-ksu-next-smooth-bypasscharging-nomount" >> $GITHUB_ENV
 
       - name: Create Swap
         run: |
@@ -99,14 +97,15 @@ jobs:
 
       - name: Scout Checkpoint
         env:
-          ROOT: "sukisu"
+          ROOT: "ksu-next"
           VARIANT: "susfs"
           RUN_MODE: "Test"
+          GH_TOKEN: ${{ secrets.GH_TOKEN }} # Added GH_TOKEN to fix the manifest update error
         run: bash builder/scripts/scout.sh
 
       - name: Setup ccache
         env:
-          ACTUAL_ROOT: "sukisu"
+          ACTUAL_ROOT: "ksu-next"
           CLANG_VARIANT: "neutron"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: bash builder/scripts/lib/ccache_setup.sh
@@ -115,7 +114,7 @@ jobs:
         env:
           INPUT_HZ: "smooth"
           INPUT_VARIANT: "susfs"
-          INPUT_ROOT: "sukisu"
+          INPUT_ROOT: "ksu-next"
           INPUT_LTO: "full"
           INPUT_HARDENED: "off"
           INPUT_HTSR: "on"
@@ -140,7 +139,7 @@ jobs:
         run: bash builder/scripts/lib/ccache_save.sh
 
   release_build:
-    name: "Release Build (SukiSU / Smooth / SUSFS / Neutron)"
+    name: "Release Build (KSU-Next / Smooth / SUSFS / Neutron)"
     needs: test_build # Implicitly waits for test_build to SUCCEED
     runs-on: ubuntu-24.04
     permissions:
@@ -163,8 +162,8 @@ jobs:
       - name: Setup Hardcoded Environment Variables
         run: |
           echo "HZ_ID=300" >> $GITHUB_ENV
-          echo "ACTUAL_ROOT=sukisu" >> $GITHUB_ENV
-          echo "BUILD_NAME=susfs-sukisu-smooth-bypasscharging-nomount" >> $GITHUB_ENV
+          echo "ACTUAL_ROOT=ksu-next" >> $GITHUB_ENV
+          echo "BUILD_NAME=susfs-ksu-next-smooth-bypasscharging-nomount" >> $GITHUB_ENV
 
       - name: Create Swap
         run: |
@@ -200,14 +199,15 @@ jobs:
 
       - name: Scout Checkpoint
         env:
-          ROOT: "sukisu"
+          ROOT: "ksu-next"
           VARIANT: "susfs"
           RUN_MODE: "Release"
+          GH_TOKEN: ${{ secrets.GH_TOKEN }} # Added GH_TOKEN to fix the manifest update error
         run: bash builder/scripts/scout.sh
 
       - name: Setup ccache
         env:
-          ACTUAL_ROOT: "sukisu"
+          ACTUAL_ROOT: "ksu-next"
           CLANG_VARIANT: "neutron"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: bash builder/scripts/lib/ccache_setup.sh
@@ -216,7 +216,7 @@ jobs:
         env:
           INPUT_HZ: "smooth"
           INPUT_VARIANT: "susfs"
-          INPUT_ROOT: "sukisu"
+          INPUT_ROOT: "ksu-next"
           INPUT_LTO: "full"
           INPUT_HARDENED: "off"
           INPUT_HTSR: "on"
@@ -271,7 +271,7 @@ jobs:
           name: Daily Auto Build - ${{ github.sha }}
           body: |
             ### 🛠️ Build Configuration
-            - **Variant:** SUSFS (SukiSU)
+            - **Variant:** SUSFS (KSU-Next)
             - **Refresh Rate:** Smooth (300 HZ)
             - **Clang Toolchain:** Neutron
             - **Mods Enabled:** Bypass Charging, NoMount, Spoof Uname
