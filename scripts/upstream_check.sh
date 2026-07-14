@@ -62,9 +62,3 @@ done
 
 RAW_TEXT="${PICK_EMOJI} ${#UPDATES[@]} update(s) found -- new commit detected\n\n${BODY_LINES}"
 TEXT=$(printf '%b' "$RAW_TEXT")
-
-curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-  -d "chat_id=${TG_CHAT}" \
-  --data-urlencode "text=${TEXT}" > /dev/null
-
-echo "Notified: ${#UPDATES[@]} update(s)."
