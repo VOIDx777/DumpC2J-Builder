@@ -1,0 +1,313 @@
+name: DumpC2J Kernel Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_name:
+        description: "Custom Kernel Name (LOCALVERSION)"
+        required: true
+        type: string
+        default: "-anykern3-11-DumpC2J"
+      spoof_uname:
+        description: "Spoof Uname (SUSFS/Stock Naming)"
+        required: true
+        type: boolean
+        default: false
+      clang_variant:
+        description: "Clang Toolchain"
+        required: true
+        type: choice
+        options:
+          - neutron
+          - cirrus
+          - weebx
+          - zyc
+        default: neutron
+      hz:
+        description: "Refresh Rate (HZ)"
+        required: true
+        type: choice
+        options:
+          - powersave
+          - balance
+          - smooth
+          - performance
+          - ultra-performance
+        default: smooth
+      variant:
+        description: "Build Variant"
+        required: true
+        type: choice
+        options:
+          - stock
+          - root
+          - susfs
+        default: stock
+      root:
+        description: "Root Method"
+        required: true
+        type: choice
+        options:
+          - none
+          - ksu-next
+          - kowsu
+          - sukisu
+          - resukisu
+        default: sukisu
+      lto:
+        description: "LTO Mode"
+        required: true
+        type: choice
+        options:
+          - full
+          - thin
+          - none
+        default: full
+      bypasscharging:
+        description: "Bypass Charging (MCA Override)"
+        required: true
+        type: boolean
+        default: true
+      droidspaces:
+        description: "Droidspaces Support"
+        required: true
+        type: boolean
+        default: false
+      kernel_version_spoof:
+        description: "Spoof Kernel Version (kosongkan = pakai upstream)"
+        required: false
+        type: string
+        default: ""
+      debug:
+        description: "Debug Mode (nokaslr, no optimizations)"
+        required: true
+        type: boolean
+        default: false
+      nomount:
+        description: "NoMount (VFS Path Injection, no mount table)"
+        required: true
+        type: boolean
+        default: false
+      run_mode:
+        description: "Run Mode (Release=pinned only, Test=check upstream)"
+        required: true
+        type: choice
+        options:
+          - Release
+          - Test
+        default: Release
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: "Custom Build"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      lto_actual: ${{ steps.lto_output.outputs.lto_actual }}
+
+    steps:
+      - name: Validate Input Combination
+        run: |
+          if [ "${{ inputs.variant }}" == "root" ] && [ "${{ inputs.root }}" == "resukisu" ]; then
+            echo "::warning::ReSukiSU root-only was previously blocked due to a manager-open crash — retesting after execveat_init fix (commit 7667f76)."
+          fi
+          echo "[+] Input combination valid: variant=${{ inputs.variant }}, root=${{ inputs.root }}"
+
+      - name: Checkout Builder
+        uses: actions/checkout@v4
+        with:
+          path: builder
+          fetch-depth: 0
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=50 \
+            --branch main \
+            https://${{ secrets.GH_TOKEN }}@github.com/adennnqt/DumpC2J-Kernel \
+            kernel-source
+
+      - name: Parse Inputs
+        id: setup_vars
+        env:
+          INPUT_HZ: ${{ inputs.hz }}
+          INPUT_VARIANT: ${{ inputs.variant }}
+          INPUT_ROOT: ${{ inputs.root }}
+          INPUT_HARDENED: "off"
+          INPUT_BYPASS: ${{ inputs.bypasscharging && 'on' || 'off' }}
+          INPUT_DROIDSPACES: ${{ inputs.droidspaces && 'on' || 'off' }}
+          INPUT_HTSR: "on"
+          INPUT_WIFI: "on"
+          INPUT_KGSL: "on"
+          INPUT_DATA: "on"
+          INPUT_DEBUG: ${{ inputs.debug && 'on' || 'off' }}
+          INPUT_KERNEL_NAME: ${{ inputs.kernel_name }}
+          INPUT_SPOOF_UNAME: ${{ inputs.spoof_uname && 'on' || 'off' }}
+          INPUT_NOMOUNT: ${{ inputs.nomount && 'on' || 'off' }}
+        run: |
+          if [ "$INPUT_HZ" == "powersave" ]; then HZ_ID=100
+          elif [ "$INPUT_HZ" == "balance" ]; then HZ_ID=250
+          elif [ "$INPUT_HZ" == "performance" ]; then HZ_ID=500
+          elif [ "$INPUT_HZ" == "smooth" ]; then HZ_ID=300
+          elif [ "$INPUT_HZ" == "ultra-performance" ]; then HZ_ID=1000
+          fi
+          echo "HZ_ID=$HZ_ID" >> $GITHUB_ENV
+
+          ACTUAL_ROOT="$INPUT_ROOT"
+          if [ "$INPUT_VARIANT" == "stock" ]; then
+            ACTUAL_ROOT="none"
+          fi
+          echo "ACTUAL_ROOT=$ACTUAL_ROOT" >> $GITHUB_ENV
+
+          if [ "$INPUT_VARIANT" == "stock" ]; then
+            BUILD_NAME="${INPUT_VARIANT}-${INPUT_HZ}"
+          else
+            BUILD_NAME="${INPUT_VARIANT}-${ACTUAL_ROOT}-${INPUT_HZ}"
+          fi
+
+          [ "$INPUT_BYPASS" == "on" ] && BUILD_NAME="${BUILD_NAME}-bypasscharging"
+          [ "$INPUT_DROIDSPACES" == "on" ] && BUILD_NAME="${BUILD_NAME}-droidspaces"
+          [ "$INPUT_DEBUG" == "on" ] && BUILD_NAME="${BUILD_NAME}-debug"
+          [ "$INPUT_NOMOUNT" == "on" ] && BUILD_NAME="${BUILD_NAME}-nomount"
+
+          echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
+
+      - name: Create Swap
+        run: |
+          SWAPFILE="/mnt/build_swapfile"
+          while true; do
+            if sudo fallocate -l 10G $SWAPFILE || sudo dd if=/dev/zero of=$SWAPFILE bs=1M count=10240 status=progress; then
+              break
+            else
+              sleep 5
+            fi
+          done
+          sudo chmod 600 $SWAPFILE && sudo mkswap $SWAPFILE && sudo swapon $SWAPFILE
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex \
+            g++-multilib gcc-multilib git gnupg gperf imagemagick \
+            lib32ncurses-dev lib32readline-dev lib32z1-dev libncurses-dev \
+            libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush \
+            rsync schedtool squashfs-tools xsltproc zip zlib1g-dev \
+            python3 clang lld llvm jq
+
+      - name: Setup Clang
+        run: |
+          bash builder/scripts/setup_clang.sh ${{ inputs.clang_variant }}
+
+      - name: Setup AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          cp kernel-source/anykernel/anykernel.sh anykernel/anykernel.sh
+          cp -r kernel-source/anykernel/tools/* anykernel/tools/
+
+      - name: Scout Checkpoint
+        env:
+          ROOT: ${{ env.ACTUAL_ROOT }}
+          VARIANT: ${{ inputs.variant }}
+          RUN_MODE: ${{ inputs.run_mode }}
+        run: bash builder/scripts/scout.sh
+
+      - name: Setup ccache
+        env:
+          ACTUAL_ROOT: ${{ env.ACTUAL_ROOT }}
+          CLANG_VARIANT: ${{ inputs.clang_variant }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: bash builder/scripts/lib/ccache_setup.sh
+
+      - name: Build Kernel
+        env:
+          INPUT_HZ: ${{ inputs.hz }}
+          INPUT_VARIANT: ${{ inputs.variant }}
+          INPUT_ROOT: ${{ inputs.root }}
+          INPUT_LTO: ${{ inputs.lto }}
+          INPUT_HARDENED: "off"
+          INPUT_HTSR: "on"
+          INPUT_WIFI: "on"
+          INPUT_KGSL: "on"
+          INPUT_DATA: "on"
+          INPUT_BYPASS: ${{ inputs.bypasscharging && 'on' || 'off' }}
+          INPUT_DROIDSPACES: ${{ inputs.droidspaces && 'on' || 'off' }}
+          INPUT_DEBUG: ${{ inputs.debug && 'on' || 'off' }}
+          INPUT_KERNEL_NAME: ${{ inputs.kernel_name }}
+          INPUT_SPOOF_UNAME: ${{ inputs.spoof_uname && 'on' || 'off' }}
+          INPUT_VERSION_SPOOF: ${{ inputs.kernel_version_spoof }}
+          INPUT_NOMOUNT: ${{ inputs.nomount && 'on' || 'off' }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          bash builder/scripts/build.sh
+
+      - name: Save ccache
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: bash builder/scripts/lib/ccache_save.sh
+
+      - name: Set LTO Output
+        id: lto_output
+        run: echo "lto_actual=${{ env.LTO_ACTUAL }}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DumpC2J-${{ env.BUILD_NAME }}
+          path: kernel-source/DumpC2J-Release
+          retention-days: 7
+          
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare assets
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f -name "*.zip" -exec mv {} release_assets/ \; || true
+          find artifacts -type f -name "*.img" -exec mv {} release_assets/ \; || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dumpc2j-build-${{ github.run_number }}-${{ github.sha }}
+          name: DumpC2J Build - ${{ github.sha }}
+          body: |
+            ### 🛠️ Build Configuration
+            | Option | Selected Value |
+            | :--- | :--- |
+            | **Variant** | `${{ inputs.variant }}` |
+            | **Root Method** | `${{ inputs.root }}` |
+            | **Refresh Rate (HZ)** | `${{ inputs.hz }}` |
+            | **Clang Toolchain** | `${{ inputs.clang_variant }}` |
+            | **LTO Mode** | `${{ inputs.lto }}` |
+            | **Kernel Name** | `${{ inputs.kernel_name }}` |
+            | **Run Mode** | `${{ inputs.run_mode }}` |
+            
+            ### ✨ Features & Mods
+            | Feature | Status |
+            | :--- | :--- |
+            | **Bypass Charging** | `${{ inputs.bypasscharging }}` |
+            | **NoMount** | `${{ inputs.nomount }}` |
+            | **Droidspaces** | `${{ inputs.droidspaces }}` |
+            | **Spoof Uname** | `${{ inputs.spoof_uname }}` |
+            | **Spoof Kernel Version** | `${{ inputs.kernel_version_spoof || 'Upstream' }}` |
+            | **Debug Mode** | `${{ inputs.debug }}` |
+            
+            **Commit:** ${{ github.sha }}
+            **Ref:** ${{ github.ref }}
+            
+            > [!CAUTION]
+            > **BACKUP your boot.img** before flashing to recover from potential bootloops or other issues.
+          files: release_assets/*
